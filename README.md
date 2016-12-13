@@ -1,2 +1,2 @@
 # efiaIRC
-trainee project
+trainee project :)
