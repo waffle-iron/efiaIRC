@@ -16,32 +16,47 @@ namespace classIRC
     {
         private const String MULTICAST_NET = "239.42.42.42";
         private const int MC_PORT = 6667;
-        private const int IRC_PORT = 194;
+        //private const int IRC_PORT = 194; // deprecated
 
-        private UdpClient udpClient;
-        private IPEndPoint endPoint;
+        private UdpClient udpSender;
+        private UdpClient udpListener;
 
-        private static Thread m_t;
-
+        /// <summary>
+        /// Set up listener (client) to reveive incoming messages
+        /// </summary>
         public Network()
         {
-            IPAddress address = IPAddress.Parse(MULTICAST_NET);  // Zieladresse
-            endPoint = new IPEndPoint(address, MC_PORT);
-            udpClient = new UdpClient(MC_PORT, AddressFamily.InterNetwork);
+            // Set up sender
+            IPAddress multicastaddress = IPAddress.Parse(MULTICAST_NET);
+            IPEndPoint serverEp = new IPEndPoint(multicastaddress, MC_PORT);            
+            udpSender = new UdpClient(serverEp);
+            udpSender.JoinMulticastGroup(multicastaddress);
 
-            udpClient.JoinMulticastGroup(address);
+            // Set up listener
+            IPEndPoint localEp = new IPEndPoint(IPAddress.Any, MC_PORT);
+            udpListener = new UdpClient(localEp);
+            udpListener.JoinMulticastGroup(multicastaddress);
 
-            Task<UdpReceiveResult> receiveTask = udpClient.ReceiveAsync();
 
-            m_t = new Thread(new ThreadStart(ClientTarget.StartMulticastConversation));
-            m_t.Start();
-
-            new IPEndPoint(IPAddress.Any, 50);
+            // TODO: insert some wizards to deal with the magical stuff
+            // add a Thread to handle udpListener.ReceiveAsync()
+            // fire Event if message is incoming
+            // restart receiveAsync-Thread
+            // write some handler for the event
         }
 
+        /// <summary>
+        /// Client catched something (might be important)
+        /// </summary>
+        /// <returns>Received message</returns>
         private Message receiveMessage()
         {
-            byte[] data = udpClient.Receive(ref endPoint);
+            IPEndPoint localEp = new IPEndPoint(IPAddress.Any, MC_PORT);
+
+            UdpClient udpClient = new UdpClient(localEp);
+            udpClient.JoinMulticastGroup(IPAddress.Parse(MULTICAST_NET));
+
+            byte[] data = udpClient.Receive(ref localEp);
 
             MemoryStream stream = new MemoryStream(data);
             BinaryFormatter formatter = new BinaryFormatter();
@@ -50,15 +65,20 @@ namespace classIRC
             return (Message) message;
         }
 
+        /// <summary>
+        /// Set up sender to tell some tales
+        /// </summary>
+        /// <param name="message">Message to send</param>
         public void sendMessage(Message message)
         {
+            // Serialize stuff
             MemoryStream stream = new MemoryStream();
             BinaryFormatter formatter = new BinaryFormatter();
             formatter.Serialize(stream ,message);
 
+            // message out
             byte[] data = stream.ToArray();
-
-            udpClient.Send(data, data.Length, endPoint);
+            udpSender.SendAsync(data, data.Length);
         }
     }
 }
