@@ -8,27 +8,25 @@ using System.Net;
 using System.Threading;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
 
 namespace classIRC
 {
     public class Network
     {
-        const String MULTICAST_NET = "239.42.42.42";
-        const int MC_PORT = 6667;
-        const int IRC_PORT = 194;
+        private const String MULTICAST_NET = "239.42.42.42";
+        private const int MC_PORT = 6667;
+        private const int IRC_PORT = 194;
 
         private UdpClient udpClient;
-        private static Thread m_t;
-
         private IPEndPoint endPoint;
+
+        private static Thread m_t;
 
         public Network()
         {
             IPAddress address = IPAddress.Parse(MULTICAST_NET);  // Zieladresse
-
-            // Generiere Endpunkt
-            endPoint = new IPEndPoint(address, IRC_PORT);
-
+            endPoint = new IPEndPoint(address, MC_PORT);
             udpClient = new UdpClient(MC_PORT, AddressFamily.InterNetwork);
 
             udpClient.JoinMulticastGroup(address);
@@ -43,15 +41,24 @@ namespace classIRC
 
         private Message receiveMessage()
         {
+            byte[] data = udpClient.Receive(ref endPoint);
 
+            MemoryStream stream = new MemoryStream(data);
+            BinaryFormatter formatter = new BinaryFormatter();
+
+            object message = formatter.Deserialize(stream);
+            return (Message) message;
         }
 
         public void sendMessage(Message message)
         {
-            IFormatter formatter = new BinaryFormatter();
-            formatter.Serialize( ,message);
+            MemoryStream stream = new MemoryStream();
+            BinaryFormatter formatter = new BinaryFormatter();
+            formatter.Serialize(stream ,message);
 
-            udpClient.Send(endPoint)
+            byte[] data = stream.ToArray();
+
+            udpClient.Send(data, data.Length, endPoint);
         }
     }
 }
